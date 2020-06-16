@@ -51,11 +51,14 @@ bool CLaserOdometry2D::is_initialized()
   return module_initialized;
 }
 
-void CLaserOdometry2D::init(const sensor_msgs::LaserScan& scan,
-                            const geometry_msgs::Pose& initial_robot_pose)
+void CLaserOdometry2D::init(const sensor_msgs::msg::LaserScan& scan,
+                            const geometry_msgs::msg::Pose& initial_robot_pose)
 {
   //Got an initial scan laser, obtain its parametes
-  ROS_INFO_COND(verbose, "[rf2o] Got first Laser Scan .... Configuring node");
+#if 0
+  if (verbose)
+    RCLCPP_INFO("[rf2o] Got first Laser Scan .... Configuring node");
+#endif
 
   width = scan.ranges.size();    // Num of samples (size) of the scan laser
 
@@ -74,8 +77,11 @@ void CLaserOdometry2D::init(const sensor_msgs::LaserScan& scan,
   robot_initial_pose.translation()(0) = initial_robot_pose.position.x;
   robot_initial_pose.translation()(1) = initial_robot_pose.position.y;
 
-  ROS_INFO_STREAM_COND(verbose, "[rf2o] Setting origin at:\n"
+#if 0
+  if (verbose)
+    RCLCPP_INFO_STREAM("[rf2o] Setting origin at:\n"
                        << robot_initial_pose.matrix());
+#endif
 
   //Set the initial pose
   laser_pose_    = robot_initial_pose * laser_pose_on_robot_;
@@ -179,7 +185,7 @@ const CLaserOdometry2D::Pose3d& CLaserOdometry2D::getPose() const
   return robot_pose_;
 }
 
-bool CLaserOdometry2D::odometryCalculation(const sensor_msgs::LaserScan& scan)
+bool CLaserOdometry2D::odometryCalculation(const sensor_msgs::msg::LaserScan& scan)
 {
   //==================================================================================
   //						DIFERENTIAL  ODOMETRY  MULTILEVEL
@@ -188,7 +194,7 @@ bool CLaserOdometry2D::odometryCalculation(const sensor_msgs::LaserScan& scan)
   //copy laser scan to internal variable
   range_wf = Eigen::Map<const Eigen::MatrixXf>(scan.ranges.data(), width, 1);
 
-  ros::WallTime start = ros::WallTime::now();
+  std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
   createImagePyramid();
 
@@ -249,10 +255,13 @@ bool CLaserOdometry2D::odometryCalculation(const sensor_msgs::LaserScan& scan)
     if (!filterLevelSolution()) return false;
   }
 
-  m_runtime = ros::WallTime::now() - start;
-
-  ROS_INFO_COND(verbose, "[rf2o] execution time (ms): %f",
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+  if (verbose)
+    std::cout << "[rf2o] execution time (ms) = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
+#if 0
+    RCLCPP_INFO("[rf2o] execution time (ms): %f",
                 m_runtime.toSec()*double(1000));
+#endif
 
   //Update poses
   PoseUpdate();
@@ -716,7 +725,10 @@ void CLaserOdometry2D::solveSystemNonLinear()
   cov_odo = (1.f/float(num_valid_range-3))*AtA.inverse()*res.squaredNorm();
   kai_loc_level_ = Var;
 
-  ROS_INFO_STREAM_COND(verbose && false, "[rf2o] COV_ODO:\n" << cov_odo);
+#if 0
+  if (verbose && false)
+    RCLCPP_INFO_STREAM("[rf2o] COV_ODO:\n" << cov_odo);
+#endif
 }
 
 void CLaserOdometry2D::Reset(const Pose3d& ini_pose/*, CObservation2DRangeScan scan*/)
@@ -811,7 +823,10 @@ bool CLaserOdometry2D::filterLevelSolution()
   Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eigensolver(cov_odo);
   if (eigensolver.info() != Eigen::Success)
   {
-    ROS_WARN_COND(verbose, "[rf2o] ERROR: Eigensolver couldn't find a solution. Pose is not updated");
+#if 0
+    if (verbose)
+      RCLCPP_WARN("[rf2o] ERROR: Eigensolver couldn't find a solution. Pose is not updated");
+#endif
     return false;
   }
 
@@ -934,24 +949,30 @@ void CLaserOdometry2D::PoseUpdate()
   kai_loc_old_(1) = -kai_abs_(0)*std::sin(phi) + kai_abs_(1)*std::cos(phi);
   kai_loc_old_(2) =  kai_abs_(2);
 
-  ROS_INFO_COND(verbose, "[rf2o] LASERodom = [%f %f %f]",
+#if 0
+  if (verbose)
+    RCLCPP_INFO("[rf2o] LASERodom = [%f %f %f]",
                 laser_pose_.translation()(0),
                 laser_pose_.translation()(1),
                 rf2o::getYaw(laser_pose_.rotation()));
+#endif
 
   //Compose Transformations
   robot_pose_ = laser_pose_ * laser_pose_on_robot_inv_;
 
-  ROS_INFO_COND(verbose, "BASEodom = [%f %f %f]",
+#if 0
+  if (verbose)
+    RCLCPP_INFO("BASEodom = [%f %f %f]",
                 robot_pose_.translation()(0),
                 robot_pose_.translation()(1),
                 rf2o::getYaw(robot_pose_.rotation()));
+#endif
 
   // Estimate linear/angular speeds (mandatory for base_local_planner)
   // last_scan -> the last scan received
   // last_odom_time -> The time of the previous scan lasser used to estimate the pose
   //-------------------------------------------------------------------------------------
-  double time_inc_sec = (current_scan_time - last_odom_time).toSec();
+  double time_inc_sec = (current_scan_time - last_odom_time).seconds();
   last_odom_time = current_scan_time;
   lin_speed = acu_trans(0,2) / time_inc_sec;
   //double lin_speed = sqrt( mrpt::math::square(robot_oldpose.x()-robot_pose.x()) + mrpt::math::square(robot_oldpose.y()-robot_pose.y()) )/time_inc_sec;
