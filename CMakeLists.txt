@@ -44,6 +44,7 @@ ament_target_dependencies(${PROJECT_NAME} ${DEPENDENCIES})
 ## Declare a cpp executable
 add_executable(rf2o_laser_odometry_node src/CLaserOdometry2DNode.cpp)
 ament_target_dependencies(rf2o_laser_odometry_node ${DEPENDENCIES})
+target_link_libraries(rf2o_laser_odometry_node ${PROJECT_NAME})
 
 ################
 ##  Install   ##
